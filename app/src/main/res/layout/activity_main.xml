@@ -26,7 +26,7 @@
         android:id="@+id/instructionTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Tap the button below to capture a screenshot"
+        android:text="Tap the button below to capture the screen"
         android:textSize="14sp"
         android:textColor="@android:color/darker_gray"
         android:layout_marginTop="8dp"

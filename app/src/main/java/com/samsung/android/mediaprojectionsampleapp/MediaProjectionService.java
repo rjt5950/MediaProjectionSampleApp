@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -18,6 +19,7 @@ import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.DisplayMetrics;
@@ -39,13 +41,7 @@ import java.util.Locale;
 
 public class MediaProjectionService extends Service {
 
-    public static final String ACTION_START = "ACTION_START_CAPTURE";
-    public static final String ACTION_STOP = "ACTION_STOP_CAPTURE";
-    public static final String ACTION_STOPPED = "com.samsung.android.mediaprojectionsampleapp.ACTION_STOPPED";
-    public static final String EXTRA_RESULT_CODE = "result_code";
-    public static final String EXTRA_RESULT_DATA = "result_data";
     private static final String TAG = "MediaProjectionService";
-    private static final int NOTIFICATION_ID = 1001;
     private static boolean isRunning = false;
     private MediaProjectionManager projectionManager;
     private MediaProjection mediaProjection;
@@ -53,18 +49,31 @@ public class MediaProjectionService extends Service {
     private ImageReader imageReader;
     private final List<String> capturedFilePaths = new ArrayList<>();
 
+    private HandlerThread backgroundThread;
+    private Handler backgroundHandler;
+    private Bitmap reusableBitmap;
+
     @Override
     public void onCreate() {
         super.onCreate();
 
         projectionManager =
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
+        backgroundThread = new HandlerThread(Constants.HANDLER_THREAD_NAME);
+        backgroundThread.start();
+        backgroundHandler = new Handler(backgroundThread.getLooper());
     }
 
     @Override
     public void onDestroy() {
+        Log.d(TAG, "Service onDestroy");
+        cleanup();
+        if (backgroundThread != null) {
+            backgroundThread.quitSafely();
+            backgroundThread = null;
+        }
         super.onDestroy();
-        isRunning = false;
     }
 
     public static boolean isRunning() {
@@ -77,9 +86,9 @@ public class MediaProjectionService extends Service {
             return START_NOT_STICKY;
 
         String action = intent.getAction();
-        if (ACTION_START.equals(action)) {
+        if (Constants.ACTION_START.equals(action)) {
             startCapture(intent);
-        } else if (ACTION_STOP.equals(action)) {
+        } else if (Constants.ACTION_STOP.equals(action)) {
             stopCapture();
         }
         return START_NOT_STICKY;
@@ -92,7 +101,13 @@ public class MediaProjectionService extends Service {
     }
 
     private void cleanup() {
+        Log.d(TAG, "Cleaning up resources");
         isRunning = false;
+
+        if (reusableBitmap != null) {
+            reusableBitmap.recycle();
+            reusableBitmap = null;
+        }
 
         if (!capturedFilePaths.isEmpty()) {
             String[] paths = capturedFilePaths.toArray(new String[0]);
@@ -101,14 +116,8 @@ public class MediaProjectionService extends Service {
             capturedFilePaths.clear();
         }
 
-        if (imageReader != null) {
-            imageReader.close();
-            imageReader = null;
-        }
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
-        }
+        stopVirtualDisplay();
+
         if (mediaProjection != null) {
             mediaProjection.unregisterCallback(callback);
             mediaProjection.stop();
@@ -116,10 +125,22 @@ public class MediaProjectionService extends Service {
         }
     }
 
+    private void stopVirtualDisplay() {
+        if (imageReader != null) {
+            imageReader.setOnImageAvailableListener(null, null);
+            imageReader.close();
+            imageReader = null;
+        }
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+    }
+
     private void startCapture(Intent intent) {
-        int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED);
-        Intent data = intent.getParcelableExtra(EXTRA_RESULT_DATA);
-        startForeground(NOTIFICATION_ID, createNotification());
+        int resultCode = intent.getIntExtra(Constants.EXTRA_RESULT_CODE, Activity.RESULT_CANCELED);
+        Intent data = intent.getParcelableExtra(Constants.EXTRA_RESULT_DATA);
+        startForeground(Constants.NOTIFICATION_ID, createNotification());
 
         if (data != null) {
             mediaProjection = projectionManager.getMediaProjection(resultCode, data);
@@ -135,16 +156,24 @@ public class MediaProjectionService extends Service {
     }
 
     private Notification createNotification() {
-        String channelId = "screen_capture";
+        String channelId = Constants.NOTIFICATION_CHANNEL_ID;
         NotificationManager notificationManager = getSystemService(NotificationManager.class);
-        NotificationChannel notificationChannel = new NotificationChannel(channelId, "Screen " +
-                "Capture", NotificationManager.IMPORTANCE_LOW);
+        NotificationChannel notificationChannel = new NotificationChannel(channelId, 
+                getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_LOW);
         notificationManager.createNotificationChannel(notificationChannel);
+
+        Intent stopIntent = new Intent(this, MediaProjectionService.class);
+        stopIntent.setAction(Constants.ACTION_STOP);
+        PendingIntent stopPendingIntent = PendingIntent.getService(this, 0, stopIntent, 
+                PendingIntent.FLAG_IMMUTABLE);
+
         return new NotificationCompat
                 .Builder(this, channelId)
-                .setContentTitle("Screen Capture")
-                .setContentText("Capturing screen")
+                .setContentTitle(getString(R.string.notification_title))
+                .setContentText(getString(R.string.notification_text))
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, 
+                        getString(R.string.stop_capture), stopPendingIntent)
                 .build();
     }
 
@@ -155,14 +184,13 @@ public class MediaProjectionService extends Service {
         int density = metrics.densityDpi;
 
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
-        virtualDisplay = mediaProjection.createVirtualDisplay("ScreenCaptureSampleApp", width,
+        virtualDisplay = mediaProjection.createVirtualDisplay(Constants.VIRTUAL_DISPLAY_NAME, width,
                 height, density, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader.getSurface(), null, null);
 
         imageReader.setOnImageAvailableListener(reader -> {
             OutputStream fos = null;
-            Bitmap bitmap = null;
-            Image image = reader.acquireNextImage();
+            Image image = reader.acquireLatestImage();
             if (image == null)
                 return;
             try {
@@ -174,29 +202,35 @@ public class MediaProjectionService extends Service {
                 int rowStride = planes[0].getRowStride();
                 int rowPadding = rowStride - (pixelStride * width);
 
-                // Create bitmap with correct dimensions
-                bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height,
-                        Bitmap.Config.ARGB_8888);
-                bitmap.copyPixelsFromBuffer(buffer);
+                int bitmapWidth = width + rowPadding / pixelStride;
+
+                // Reuse bitmap if possible to reduce GC pressure
+                if (reusableBitmap == null || reusableBitmap.getWidth() != bitmapWidth || reusableBitmap.getHeight() != height) {
+                    if (reusableBitmap != null) {
+                        reusableBitmap.recycle();
+                    }
+                    reusableBitmap = Bitmap.createBitmap(bitmapWidth, height, Bitmap.Config.ARGB_8888);
+                }
+
+                reusableBitmap.copyPixelsFromBuffer(buffer);
 
                 // Write bitmap to Root custom folder
                 File root = Environment.getExternalStorageDirectory();
-                File customDir = new File(root, "MediaProjectionSampleApp");
+                File customDir = new File(root, Constants.FOLDER_NAME);
                 if (!customDir.exists()) {
                     if (!customDir.mkdirs()) {
                         Log.e(TAG, "Failed to create directory at root: " + customDir.getAbsolutePath());
                     }
                 }
 
-                String timeStamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date());
-                String capturedImageName = "SC-" + timeStamp + ".png";
+                String timeStamp = new SimpleDateFormat(Constants.DATE_FORMAT, Locale.getDefault()).format(new Date());
+                String capturedImageName = Constants.SCREENSHOT_PREFIX + timeStamp + Constants.SCREENSHOT_EXTENSION;
                 File file = new File(customDir, capturedImageName);
                 fos = new FileOutputStream(file);
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                reusableBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
                 fos.close();
                 fos = null;
                 
-                //Log.d(TAG, "Screenshot saved to root: " + file.getAbsolutePath());
                 capturedFilePaths.add(file.getAbsolutePath());
             } catch (Exception e) {
                 Log.e(TAG, "Error processing image: " + e.getMessage());
@@ -209,12 +243,9 @@ public class MediaProjectionService extends Service {
                         ioe.printStackTrace();
                     }
                 }
-                if (bitmap != null) {
-                    bitmap.recycle();
-                }
                 image.close();
             }
-        }, new Handler(Looper.getMainLooper()));
+        }, backgroundHandler);
     }
 
     @Nullable
@@ -234,7 +265,7 @@ public class MediaProjectionService extends Service {
 
             // Notify MainActivity that capture has stopped
             Log.d(TAG, "Sending ACTION_STOPPED broadcast");
-            Intent intent = new Intent(ACTION_STOPPED);
+            Intent intent = new Intent(Constants.ACTION_STOPPED);
             intent.setPackage(getPackageName());
             sendBroadcast(intent);
 

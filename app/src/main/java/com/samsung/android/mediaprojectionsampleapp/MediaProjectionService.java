@@ -13,8 +13,10 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
 import android.media.ImageReader;
+import android.media.MediaScannerConnection;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -27,23 +29,29 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class MediaProjectionService extends Service {
 
     public static final String ACTION_START = "ACTION_START_CAPTURE";
     public static final String ACTION_STOP = "ACTION_STOP_CAPTURE";
+    public static final String ACTION_STOPPED = "com.samsung.android.mediaprojectionsampleapp.ACTION_STOPPED";
     public static final String EXTRA_RESULT_CODE = "result_code";
     public static final String EXTRA_RESULT_DATA = "result_data";
     private static final String TAG = "MediaProjectionService";
     private static final int NOTIFICATION_ID = 1001;
+    private static boolean isRunning = false;
     private MediaProjectionManager projectionManager;
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
-    private String storageDirectory;
+    private final List<String> capturedFilePaths = new ArrayList<>();
 
     @Override
     public void onCreate() {
@@ -51,6 +59,16 @@ public class MediaProjectionService extends Service {
 
         projectionManager =
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        isRunning = false;
+    }
+
+    public static boolean isRunning() {
+        return isRunning;
     }
 
     @Override
@@ -74,6 +92,15 @@ public class MediaProjectionService extends Service {
     }
 
     private void cleanup() {
+        isRunning = false;
+
+        if (!capturedFilePaths.isEmpty()) {
+            String[] paths = capturedFilePaths.toArray(new String[0]);
+            MediaScannerConnection.scanFile(this, paths, null,
+                    (path, uri) -> Log.d(TAG, "Batch Scanned " + path + ": -> uri=" + uri));
+            capturedFilePaths.clear();
+        }
+
         if (imageReader != null) {
             imageReader.close();
             imageReader = null;
@@ -97,29 +124,13 @@ public class MediaProjectionService extends Service {
         if (data != null) {
             mediaProjection = projectionManager.getMediaProjection(resultCode, data);
             if (mediaProjection != null) {
-                setupStorageDirectory();
+                isRunning = true;
                 mediaProjection.registerCallback(callback, new Handler(Looper.getMainLooper()));
                 createVirtualDisplay();
                 Log.d(TAG, "Capture started");
             } else {
                 Log.d(TAG, "MediaProjection is null");
             }
-        }
-    }
-
-    private void setupStorageDirectory() {
-        File externalFilesDir = getExternalFilesDir(null);
-        if (externalFilesDir != null) {
-            storageDirectory = externalFilesDir.getAbsolutePath() + "/screenshots/";
-            File storageDir = new File(storageDirectory);
-            if (!storageDir.exists()) {
-                boolean success = storageDir.mkdirs();
-                if (!success) {
-                    Log.e(TAG, "Failed to create file storage directory.");
-                }
-            }
-        } else {
-            Log.e(TAG, "Failed to create file storage directory, getExternalFilesDir is null.");
         }
     }
 
@@ -149,9 +160,9 @@ public class MediaProjectionService extends Service {
                 imageReader.getSurface(), null, null);
 
         imageReader.setOnImageAvailableListener(reader -> {
-            FileOutputStream fos = null;
+            OutputStream fos = null;
             Bitmap bitmap = null;
-            Image image = reader.acquireLatestImage(); // use acquireNextImage() to get all frames
+            Image image = reader.acquireLatestImage();
             if (image == null)
                 return;
             try {
@@ -170,13 +181,25 @@ public class MediaProjectionService extends Service {
                         Bitmap.Config.ARGB_8888);
                 bitmap.copyPixelsFromBuffer(buffer);
 
-                // Write bitmap to file
-                if (storageDirectory != null) {
-                    String capturedImageName = "screenshot_" + System.currentTimeMillis() + ".png";
-                    fos = new FileOutputStream(storageDirectory + capturedImageName);
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
-//                    Log.d(TAG, "Screenshot " + capturedImageName + " saved.");
+                // Write bitmap to Root custom folder
+                File root = Environment.getExternalStorageDirectory();
+                File customDir = new File(root, "MediaProjectionSampleApp");
+                if (!customDir.exists()) {
+                    if (!customDir.mkdirs()) {
+                        Log.e(TAG, "Failed to create directory at root: " + customDir.getAbsolutePath());
+                    }
                 }
+
+                String timeStamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date());
+                String capturedImageName = "SC-" + timeStamp + ".png";
+                File file = new File(customDir, capturedImageName);
+                fos = new FileOutputStream(file);
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                fos.close();
+                fos = null;
+                
+                Log.d(TAG, "Screenshot saved to root: " + file.getAbsolutePath());
+                capturedFilePaths.add(file.getAbsolutePath());
             } catch (Exception e) {
                 Log.e(TAG, "Error processing image: " + e.getMessage());
                 e.printStackTrace();
@@ -206,9 +229,17 @@ public class MediaProjectionService extends Service {
         @Override
         public void onStop() {
             Log.d(TAG, "MediaProjection stopped");
+            isRunning = false;
             cleanup();
 
             stopForeground(STOP_FOREGROUND_REMOVE);
+
+            // Notify MainActivity that capture has stopped
+            Log.d(TAG, "Sending ACTION_STOPPED broadcast");
+            Intent intent = new Intent(ACTION_STOPPED);
+            intent.setPackage(getPackageName());
+            sendBroadcast(intent);
+
             stopSelf();
         }
     };

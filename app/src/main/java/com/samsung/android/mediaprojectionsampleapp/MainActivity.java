@@ -46,7 +46,8 @@ public class MainActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                 if (isGranted) {
                     Log.d(TAG, "Notification permission granted");
-                    launchMediaProjection();
+                    // Check for the next required permission instead of launching projection directly
+                    requestRequiredPermissions();
                 } else {
                     Log.w(TAG, "Notification permission denied");
                     if (!ActivityCompat.shouldShowRequestPermissionRationale(this,

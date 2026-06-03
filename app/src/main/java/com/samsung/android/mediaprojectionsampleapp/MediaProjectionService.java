@@ -96,8 +96,8 @@ public class MediaProjectionService extends Service {
 
         if (!capturedFilePaths.isEmpty()) {
             String[] paths = capturedFilePaths.toArray(new String[0]);
-            MediaScannerConnection.scanFile(this, paths, null,
-                    (path, uri) -> Log.d(TAG, "Batch Scanned " + path + ": -> uri=" + uri));
+            Log.d(TAG, "Batch Scanning " + paths.length + " files for Gallery...");
+            MediaScannerConnection.scanFile(this, paths, null, null);
             capturedFilePaths.clear();
         }
 
@@ -162,12 +162,10 @@ public class MediaProjectionService extends Service {
         imageReader.setOnImageAvailableListener(reader -> {
             OutputStream fos = null;
             Bitmap bitmap = null;
-            Image image = reader.acquireLatestImage();
+            Image image = reader.acquireNextImage();
             if (image == null)
                 return;
             try {
-                Log.d(TAG, "Screenshot available");
-
                 Image.Plane[] planes = image.getPlanes();
                 if (planes.length == 0) return;
 
@@ -198,7 +196,7 @@ public class MediaProjectionService extends Service {
                 fos.close();
                 fos = null;
                 
-                Log.d(TAG, "Screenshot saved to root: " + file.getAbsolutePath());
+                //Log.d(TAG, "Screenshot saved to root: " + file.getAbsolutePath());
                 capturedFilePaths.add(file.getAbsolutePath());
             } catch (Exception e) {
                 Log.e(TAG, "Error processing image: " + e.getMessage());

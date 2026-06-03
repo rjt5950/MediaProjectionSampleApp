@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.projection.MediaProjectionManager;
 import android.os.Bundle;
-import android.util.Log;
 import android.widget.Button;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -25,7 +24,7 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver stopReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.d(TAG, "stopReceiver onReceive: " + intent.getAction());
+            Logger.d(TAG, "stopReceiver onReceive: " + intent.getAction());
             if (Constants.ACTION_STOPPED.equals(intent.getAction())) {
                 isCapturing = false;
                 updateToggleButton();
@@ -66,18 +65,18 @@ public class MainActivity extends AppCompatActivity {
 
         projectionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
             if (result.getResultCode() != RESULT_OK) {
-                Log.d(TAG, "User denied screen sharing permission");
+                Logger.d(TAG, "User denied screen sharing permission");
                 return;
             }
 
-            Log.d(TAG, "User granted screen sharing permission");
+            Logger.d(TAG, "User granted screen sharing permission");
 
             Intent serviceIntent = new Intent(MainActivity.this, MediaProjectionService.class);
             serviceIntent.setAction(Constants.ACTION_START);
             serviceIntent.putExtra(Constants.EXTRA_RESULT_CODE, result.getResultCode());
             serviceIntent.putExtra(Constants.EXTRA_RESULT_DATA, result.getData());
             startForegroundService(serviceIntent);
-            Log.d(TAG, "Foreground service started");
+            Logger.d(TAG, "Foreground service started");
 
             isCapturing = true;
             updateToggleButton();
@@ -103,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
      * Update the toggle button text and state based on capture status.
      */
     private void updateToggleButton() {
-        Log.d(TAG, "updateToggleButton: isCapturing = " + isCapturing);
+        Logger.d(TAG, "updateToggleButton: isCapturing = " + isCapturing);
         toggleCaptureButton.setText(isCapturing ? R.string.stop_capture : R.string.start_capture);
     }
 

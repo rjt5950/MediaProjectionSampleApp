@@ -23,7 +23,6 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.DisplayMetrics;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -67,7 +66,7 @@ public class MediaProjectionService extends Service {
 
     @Override
     public void onDestroy() {
-        Log.d(TAG, "Service onDestroy");
+        Logger.d(TAG, "Service onDestroy");
         cleanup();
         if (backgroundThread != null) {
             backgroundThread.quitSafely();
@@ -101,7 +100,7 @@ public class MediaProjectionService extends Service {
     }
 
     private void cleanup() {
-        Log.d(TAG, "Cleaning up resources");
+        Logger.d(TAG, "Cleaning up resources");
         isRunning = false;
 
         if (reusableBitmap != null) {
@@ -111,7 +110,7 @@ public class MediaProjectionService extends Service {
 
         if (!capturedFilePaths.isEmpty()) {
             String[] paths = capturedFilePaths.toArray(new String[0]);
-            Log.d(TAG, "Batch Scanning " + paths.length + " files for Gallery...");
+            Logger.d(TAG, "Batch Scanning " + paths.length + " files for Gallery...");
             MediaScannerConnection.scanFile(this, paths, null, null);
             capturedFilePaths.clear();
         }
@@ -148,9 +147,9 @@ public class MediaProjectionService extends Service {
                 isRunning = true;
                 mediaProjection.registerCallback(callback, new Handler(Looper.getMainLooper()));
                 createVirtualDisplay();
-                Log.d(TAG, "Capture started");
+                Logger.d(TAG, "Capture started");
             } else {
-                Log.d(TAG, "MediaProjection is null");
+                Logger.d(TAG, "MediaProjection is null");
             }
         }
     }
@@ -171,7 +170,7 @@ public class MediaProjectionService extends Service {
                 .Builder(this, channelId)
                 .setContentTitle(getString(R.string.notification_title))
                 .setContentText(getString(R.string.notification_text))
-                .setSmallIcon(android.R.drawable.ic_menu_camera)
+                .setSmallIcon(R.drawable.ic_screen_capture)
                 .addAction(android.R.drawable.ic_menu_close_clear_cancel, 
                         getString(R.string.stop_capture), stopPendingIntent)
                 .build();
@@ -219,7 +218,7 @@ public class MediaProjectionService extends Service {
                 File customDir = new File(root, Constants.FOLDER_NAME);
                 if (!customDir.exists()) {
                     if (!customDir.mkdirs()) {
-                        Log.e(TAG, "Failed to create directory at root: " + customDir.getAbsolutePath());
+                        Logger.e(TAG, "Failed to create directory at root: " + customDir.getAbsolutePath());
                     }
                 }
 
@@ -233,14 +232,13 @@ public class MediaProjectionService extends Service {
                 
                 capturedFilePaths.add(file.getAbsolutePath());
             } catch (Exception e) {
-                Log.e(TAG, "Error processing image: " + e.getMessage());
-                e.printStackTrace();
+                Logger.e(TAG, "Error processing image: " + e.getMessage(), e);
             } finally {
                 if (fos != null) {
                     try {
                         fos.close();
                     } catch (IOException ioe) {
-                        ioe.printStackTrace();
+                        Logger.e(TAG, "Error closing stream", ioe);
                     }
                 }
                 image.close();
@@ -257,14 +255,14 @@ public class MediaProjectionService extends Service {
     private final MediaProjection.Callback callback = new MediaProjection.Callback() {
         @Override
         public void onStop() {
-            Log.d(TAG, "MediaProjection stopped");
+            Logger.d(TAG, "MediaProjection stopped");
             isRunning = false;
             cleanup();
 
             stopForeground(STOP_FOREGROUND_REMOVE);
 
             // Notify MainActivity that capture has stopped
-            Log.d(TAG, "Sending ACTION_STOPPED broadcast");
+            Logger.d(TAG, "Sending ACTION_STOPPED broadcast");
             Intent intent = new Intent(Constants.ACTION_STOPPED);
             intent.setPackage(getPackageName());
             sendBroadcast(intent);

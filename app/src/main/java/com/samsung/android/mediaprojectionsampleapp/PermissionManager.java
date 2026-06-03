@@ -2,11 +2,9 @@ package com.samsung.android.mediaprojectionsampleapp;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
 
@@ -17,6 +15,7 @@ import androidx.core.content.ContextCompat;
 
 public class PermissionManager {
 
+    private static final String TAG = "PermissionManager";
     private final Activity activity;
     private final ActivityResultLauncher<String> notificationPermissionLauncher;
 
@@ -26,18 +25,19 @@ public class PermissionManager {
     }
 
     public boolean hasRequiredPermissions() {
-        boolean notificationGranted = true;
-        notificationGranted = ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        boolean notificationGranted = ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        boolean allFilesGranted = Environment.isExternalStorageManager();
 
-        boolean allFilesGranted = true;
-        allFilesGranted = Environment.isExternalStorageManager();
-
+        Logger.d(TAG, "hasRequiredPermissions: notification=" + notificationGranted + ", allFiles=" + allFilesGranted);
         return notificationGranted && allFilesGranted;
     }
 
     public void requestRequiredPermissions(Runnable onAllPermissionsGranted) {
+        Logger.d(TAG, "requestRequiredPermissions");
+        
         // 1. Check Notification Permission (Android 13+)
         if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            Logger.i(TAG, "Requesting notification permission");
             if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
                 new AlertDialog.Builder(activity)
                         .setTitle(R.string.notification_channel_name)
@@ -53,6 +53,7 @@ public class PermissionManager {
 
         // 2. Check All Files Access (Android 11+)
         if (!Environment.isExternalStorageManager()) {
+            Logger.i(TAG, "Requesting All Files Access");
             new AlertDialog.Builder(activity)
                     .setTitle(R.string.all_files_access_title)
                     .setMessage(R.string.all_files_access_rationale)
@@ -63,6 +64,7 @@ public class PermissionManager {
                             intent.setData(Uri.parse(String.format("package:%s", activity.getPackageName())));
                             activity.startActivity(intent);
                         } catch (Exception e) {
+                            Logger.e(TAG, "Failed to launch specific settings, falling back to general", e);
                             Intent intent = new Intent();
                             intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                             activity.startActivity(intent);
@@ -74,10 +76,12 @@ public class PermissionManager {
         }
 
         // If we reach here, all permissions are granted
+        Logger.i(TAG, "All permissions granted");
         onAllPermissionsGranted.run();
     }
 
     public void handleNotificationPermissionResult(boolean isGranted, Runnable onNext) {
+        Logger.d(TAG, "handleNotificationPermissionResult: granted=" + isGranted);
         if (isGranted) {
             requestRequiredPermissions(onNext);
         } else {
@@ -90,6 +94,7 @@ public class PermissionManager {
     }
 
     private void showSettingsDialog() {
+        Logger.d(TAG, "Showing settings dialog for permanently denied permission");
         new AlertDialog.Builder(activity)
                 .setTitle(R.string.permission_required_title)
                 .setMessage(R.string.notification_permission_permanently_denied)

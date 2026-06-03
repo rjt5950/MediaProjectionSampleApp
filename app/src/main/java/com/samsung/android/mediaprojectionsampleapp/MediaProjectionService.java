@@ -74,13 +74,13 @@ public class MediaProjectionService extends Service {
     }
 
     private void cleanup() {
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
-        }
         if (imageReader != null) {
             imageReader.close();
             imageReader = null;
+        }
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
         }
         if (mediaProjection != null) {
             mediaProjection.unregisterCallback(callback);
@@ -151,7 +151,7 @@ public class MediaProjectionService extends Service {
         imageReader.setOnImageAvailableListener(reader -> {
             FileOutputStream fos = null;
             Bitmap bitmap = null;
-            Image image = reader.acquireLatestImage();
+            Image image = reader.acquireLatestImage(); // use acquireNextImage() to get all frames
             if (image == null)
                 return;
             try {
@@ -172,7 +172,7 @@ public class MediaProjectionService extends Service {
 
                 // Write bitmap to file
                 if (storageDirectory != null) {
-                    String capturedImageName = "mediaProjectionScreen_" + getCurrentTime() + ".png";
+                    String capturedImageName = "screenshot_" + System.currentTimeMillis() + ".png";
                     fos = new FileOutputStream(storageDirectory + capturedImageName);
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
 //                    Log.d(TAG, "Screenshot " + capturedImageName + " saved.");
@@ -194,11 +194,6 @@ public class MediaProjectionService extends Service {
                 image.close();
             }
         }, new Handler(Looper.getMainLooper()));
-    }
-
-    private String getCurrentTime() {
-        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
-        return LocalDateTime.now().format(dateTimeFormatter);
     }
 
     @Nullable

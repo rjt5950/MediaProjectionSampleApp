@@ -1,7 +1,7 @@
-[2026-06-03 01:49:10] [L] galaxy property is null or empty 
-[2026-06-03 01:49:10] [L] Non-GB Project : MediaProjectionSampleApp 
-[2026-06-03 01:49:10] [L] allprojects : project : app 
-[2026-06-03 01:49:10] [L] Non-GB Project : app 
-[2026-06-03 01:49:10] [D] gradle projects loaded 
-[2026-06-03 01:49:10] [L] Maven repo base URL : null 
-[2026-06-03 01:49:10] [D] gradle projects evaluated 
+[2026-06-03 10:53:56] [L] galaxy property is null or empty 
+[2026-06-03 10:53:56] [L] Non-GB Project : MediaProjectionSampleApp 
+[2026-06-03 10:53:56] [L] allprojects : project : app 
+[2026-06-03 10:53:56] [L] Non-GB Project : app 
+[2026-06-03 10:53:56] [D] gradle projects loaded 
+[2026-06-03 10:53:56] [L] Maven repo base URL : null 
+[2026-06-03 10:53:57] [D] gradle projects evaluated 

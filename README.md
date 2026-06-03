@@ -4,12 +4,15 @@ A sample Android application demonstrating how to capture screen screenshots usi
 
 ## Features
 
-*   **Screen Capture**: High-quality screen capture using `MediaProjection`.
-*   **Foreground Service**: Robust capture handling via a Foreground Service with a persistent notification.
+*   **High Performance Screen Capture**: Uses a dedicated `HandlerThread` for image processing and **Bitmap Pooling** to minimize memory churn and avoid UI lag.
+*   **Foreground Service**: Robust capture handling via a Foreground Service with a persistent notification and a built-in **Stop Action**.
 *   **Custom Storage**: Saves screenshots to a custom folder at the root of internal storage: `/sdcard/MediaProjectionSampleApp/`.
 *   **Gallery Integration**: Uses `MediaScannerConnection` to batch-index screenshots so they appear in the system Gallery after the capture session ends.
-*   **Modern Android Support**: Targets Android 15 (API 36) and handles scoped storage and notification permissions.
-*   **UI Synchronization**: Uses a `BroadcastReceiver` to ensure the activity UI stays in sync with the service state, even when capture is stopped from the system status bar.
+*   **Modern Android Support**: Targets Android 15 (API 36) with full support for Scoped Storage and the latest notification permission models.
+*   **Clean Architecture**:
+    *   `Constants.java`: Centralized management of actions, keys, and identifiers.
+    *   `PermissionManager.java`: Encapsulated logic for multi-step permission flows.
+    *   **Broadcast UI Sync**: Real-time synchronization between service state and activity button text.
 
 ## Requirements
 
@@ -21,19 +24,18 @@ A sample Android application demonstrating how to capture screen screenshots usi
 
 ## Setup and Usage
 
-1.  **Notification Permission**: On launch, the app will ask for permission to show notifications. This is required to maintain the foreground capture session.
-2.  **All Files Access**: To save files to the root directory, you must manually grant "All Files Access". The app will provide a dialog to redirect you to **Settings > Special app access > All files access**.
-3.  **Start Capture**: Press the **Start Capture** button. Grant the system's "Screen Casting" permission when prompted.
-4.  **Stop Capture**: Press the **Stop Capture** button or use the system's "Stop" button in the status bar/notification shade.
-5.  **View Results**: Once the session stops, the screenshots will be indexed and visible in your Gallery under the "MediaProjectionSampleApp" album.
-
-## Technical Details
-
-*   **Filename Format**: `SCyyyyMMdd-HHmmss.png`
-*   **Image Format**: PNG (Lossless)
-*   **Communication**: The service sends an `ACTION_STOPPED` broadcast to the activity when the projection ends to update the button text.
+1.  **Notification Permission**: On launch, the app will ask for permission to show notifications.
+2.  **All Files Access**: To save files to the root directory, grant "All Files Access" when prompted by following the redirect to system settings.
+3.  **Start Capture**: Press the **Start Capture** button. Grant the system's "Screen Casting" permission.
+4.  **Stop Capture**: 
+    *   Press the **Stop Capture** button in the app.
+    *   **NEW**: Click the **Stop Capture** action directly in the system notification shade.
+    *   Stop via the system status bar icon.
+5.  **View Results**: Screenshots are saved as `SC-yyyyMMdd-HHmmss.png`. They will be indexed and visible in your Gallery under the "MediaProjectionSampleApp" album after stopping the session.
 
 ## Project Structure
 
-*   `MainActivity.java`: Manages permission flow, UI state, and start/stop triggers.
-*   `MediaProjectionService.java`: Core logic for `MediaProjection`, `VirtualDisplay`, image processing (`ImageReader`), file I/O, and `MediaScanner` indexing.
+*   `MainActivity.java`: UI entry point, manages activity lifecycle and UI state updates.
+*   `MediaProjectionService.java`: Core engine. Manages `MediaProjection`, `VirtualDisplay`, and background image processing.
+*   `PermissionManager.java`: Handles sequential permission requests and system settings redirection.
+*   `Constants.java`: Single source of truth for all shared keys and actions.

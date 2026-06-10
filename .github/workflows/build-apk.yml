@@ -16,7 +16,7 @@ jobs:
   build:
   
     name: Build Debug APK
-    runs-on: ubuntu-latest
+    runs-on: [ code-linux, code-default ]
 
     steps:
     - name: Checkout source

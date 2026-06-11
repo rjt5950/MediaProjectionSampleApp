@@ -44,17 +44,26 @@ jobs:
     - name: Get app info (name, versionCode, versionName)
       id: app_info
       run: |
-        APP_NAME=$(grep -oP 'app_name[^"]*"\K[^"]+' app/src/main/res/values/strings.xml | head -1)
-        VERSION_CODE=$(grep -oP 'versionCode\s+\K\d+' app/build.gradle)
-        VERSION_NAME=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle)
+        # Extract app_name from strings.xml using sed
+        APP_NAME=$(grep 'name="app_name"' app/src/main/res/values/strings.xml | sed 's/.*>\(.*\)<\/string>.*/\1/')
+        VERSION_CODE=$(grep 'versionCode' app/build.gradle | head -1 | sed 's/.*versionCode\s*\([0-9]*\).*/\1/')
+        VERSION_NAME=$(grep 'versionName' app/build.gradle | head -1 | sed 's/.*versionName\s*"\([^"]*\)".*/\1/')
+        
         echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
         echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
         echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
         
+        echo "Extracted values:"
+        echo "  APP_NAME: $APP_NAME"
+        echo "  VERSION_CODE: $VERSION_CODE"
+        echo "  VERSION_NAME: $VERSION_NAME"
+        
     - name: Rename APK
       run: |
-        APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" -type f)
+        APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
         NEW_NAME="${{ steps.app_info.outputs.app_name }}_debug_${{ steps.app_info.outputs.version_code }}_${{ steps.app_info.outputs.version_name }}.apk"
+        echo "Renaming: $APK_PATH"
+        echo "To: $NEW_NAME"
         mv "$APK_PATH" "app/build/outputs/apk/debug/$NEW_NAME"
         
     - name: Upload APK Artifact

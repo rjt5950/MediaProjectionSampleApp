@@ -5,12 +5,10 @@ on:
     branches: 
     - main
     - capture-without-consent
-    - test
   pull_request:
     branches:
       - main
       - capture-without-consent
-      - test
 
 jobs:
   build:

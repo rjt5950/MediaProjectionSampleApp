@@ -28,7 +28,7 @@ jobs:
         cache: gradle
 
     - name: Set up Android SDK
-      uses: android-actions/setup-android@v4
+      uses: code-actions/android-actions-setup-android@v3
 
     - name: Install Android SDK Platform 36 and Build Tools 36
       run: |

@@ -38,5 +38,28 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x ./gradlew
       
-    - name: Build with Gradle
-      run: ./gradlew build
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+      
+    - name: Get app info (name, versionCode, versionName)
+      id: app_info
+      run: |
+        APP_NAME=$(grep -oP 'app_name[^"]*"\K[^"]+' app/src/main/res/values/strings.xml | head -1)
+        VERSION_CODE=$(grep -oP 'versionCode\s+\K\d+' app/build.gradle)
+        VERSION_NAME=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle)
+        echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+        
+    - name: Rename APK
+      run: |
+        APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" -type f)
+        NEW_NAME="${{ steps.app_info.outputs.app_name }}_debug_${{ steps.app_info.outputs.version_code }}_${{ steps.app_info.outputs.version_name }}.apk"
+        mv "$APK_PATH" "app/build/outputs/apk/debug/$NEW_NAME"
+        
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-apk
+        path: app/build/outputs/apk/debug/*_debug_*.apk
+        retention-days: 30
